@@ -1,0 +1,7 @@
+LIBRARY "DocBuilderAddIn"
+
+EXPORTS
+GetClassObject
+DestroyObject
+GetClassNames
+SetPlatformCapabilities

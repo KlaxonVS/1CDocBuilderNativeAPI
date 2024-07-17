@@ -1,0 +1,10 @@
+# Document builder resourses
+docbuilder/
+
+# Build files
+build/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+libDocBuilderAddIn.so
+Makefile
