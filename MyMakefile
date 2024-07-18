@@ -1,0 +1,4 @@
+clean:
+	rm -r CMakeFiles build Makefile libDocBuilderAddIn.so CMakeCache.txt cmake_install.cmake
+
+

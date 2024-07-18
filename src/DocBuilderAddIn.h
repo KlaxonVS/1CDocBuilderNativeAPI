@@ -1,22 +1,3 @@
-/*
- *  Modern Native AddIn
- *  Copyright (C) 2018  Infactum
- *
- *  This program is free software: you can redistribute it and/or modify
- *  it under the terms of the GNU Affero General Public License as
- *  published by the Free Software Foundation, either version 3 of the
- *  License, or (at your option) any later version.
- *
- *  This program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU Affero General Public License for more details.
- *
- *  You should have received a copy of the GNU Affero General Public License
- *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
- *
- */
-
 #ifndef DocBuilderAddIn_H
 #define DocBuilderAddIn_H
 
@@ -36,12 +17,14 @@ private:
     variant_t add(const variant_t &a, const variant_t &b);
 
     void message(const variant_t &msg);
-
-    void testfile();
-
+    // Doc API
     void searchAndReplace(const variant_t &keysAndValues);
     void searchAndReplaceOneCMD(const variant_t &pathToTemplate, const variant_t &keysAndValues, const variant_t &altPathToSave);
+    // Doc API End
 
+    // Spreadsheet API
+    void fillRow(const variant_t &range, const variant_t &rowData);
+    // Spreadsheet API End
 
     void sleep(const variant_t &delay);
 
@@ -73,13 +56,20 @@ private:
     bool fileExists(const variant_t &path);
 
     bool pathExists(const variant_t &path);
+    bool checkRangeInOneRow(const std::string range);
 
     enum class ExtensionUINT {
         DOCX = OFFICESTUDIO_FILE_DOCUMENT_DOCX,
-        DOC = OFFICESTUDIO_FILE_DOCUMENT_DOC,
-        ODT = OFFICESTUDIO_FILE_DOCUMENT_ODT,
-        RTF = OFFICESTUDIO_FILE_DOCUMENT_RTF,
-        PDF = OFFICESTUDIO_FILE_CROSSPLATFORM_PDF
+        DOC  = OFFICESTUDIO_FILE_DOCUMENT_DOC,
+        ODT  = OFFICESTUDIO_FILE_DOCUMENT_ODT,
+        RTF  = OFFICESTUDIO_FILE_DOCUMENT_RTF,
+        PDF  = OFFICESTUDIO_FILE_CROSSPLATFORM_PDF,
+        XLSX = OFFICESTUDIO_FILE_SPREADSHEET_XLSX,
+        XLS  = OFFICESTUDIO_FILE_SPREADSHEET_XLS,
+        ODS  = OFFICESTUDIO_FILE_SPREADSHEET_ODS,
+        CSV  = OFFICESTUDIO_FILE_SPREADSHEET_CSV,
+        XLTX = OFFICESTUDIO_FILE_SPREADSHEET_XLTX,
+        OTS  = OFFICESTUDIO_FILE_SPREADSHEET_OTS
     };
 };
 

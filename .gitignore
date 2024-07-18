@@ -8,3 +8,6 @@ CMakeCache.txt
 cmake_install.cmake
 libDocBuilderAddIn.so
 Makefile
+
+#Other
+.vscode/
