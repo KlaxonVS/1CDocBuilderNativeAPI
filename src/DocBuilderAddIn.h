@@ -34,6 +34,7 @@ class DocBuilderAddIn final : public Component {
   void assign(variant_t &out);
 
   void saveAndCloseFile();
+  void closeFile();
 
   variant_t samplePropertyValue();
 

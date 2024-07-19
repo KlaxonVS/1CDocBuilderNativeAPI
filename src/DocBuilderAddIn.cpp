@@ -117,6 +117,7 @@ DocBuilderAddIn::DocBuilderAddIn() {
               &DocBuilderAddIn::samplePropertyValue);
     AddMethod(L"SaveAndCloseFile", L"СохранитьИЗакрытьФайл", this,
               &DocBuilderAddIn::saveAndCloseFile);
+    AddMethod(L"CloseFile", L"ЗакрытьФайл", this, &DocBuilderAddIn::closeFile);
     AddMethod(L"GetDataFromRange", L"ПолучитьДанныеИзДиапазона", this,
               &DocBuilderAddIn::getDataFromRange);
     // AddMethod(L"SetBorders", L"УстановитьГраницы", this,
@@ -480,6 +481,12 @@ void DocBuilderAddIn::saveAndCloseFile() {
   }
 }
 
+void DocBuilderAddIn::closeFile() {
+  if (WorkDirIsSet && FileIsSet) {
+    Cbuild.CloseFile();
+  }
+}
+
 void DocBuilderAddIn::sleep(const variant_t &delay) {
   using namespace std;
   // It safe to get any type from variant.
@@ -601,18 +608,15 @@ variant_t DocBuilderAddIn::getDataFromRange(const variant_t &range) {
     if (cell == "") {
       break;
     }
-    AddError(ADDIN_E_INFO, extensionName(), cell, false);
     NSDoctRenderer::CValue oCell = oWorksheet.Call(
         "GetRange", NSDoctRenderer::CDocBuilderValue(cell.c_str())
     );
     NSDoctRenderer::CValue oValue = oCell.Call("GetValue");
     NSDoctRenderer::CString val = oValue.ToString();
     wchar_t *w_val = val.c_str();
-    if (w_val != NULL) {
-        std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
-        res += converter.to_bytes(w_val);
-        res += ";";
-    }
+    std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
+    res += (w_val != NULL) ? converter.to_bytes(w_val) : " ";
+    res += ";";
     
   }
 
