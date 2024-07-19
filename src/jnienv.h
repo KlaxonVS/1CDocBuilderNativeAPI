@@ -5,4 +5,4 @@
 
 JNIEnv *getJniEnv();
 
-#endif //JNIENV_H
+#endif  // JNIENV_H

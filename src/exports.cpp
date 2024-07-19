@@ -23,36 +23,36 @@
 #include "DocBuilderAddIn.h"
 
 #ifdef _WINDOWS
-#pragma warning (disable : 4311 4302)
+#pragma warning(disable : 4311 4302)
 #endif
 
 const WCHAR_T *GetClassNames() {
-    // Might contain multiple class names seperated by |
-    static char16_t cls_names[] = u"DocBuilder";
-    return reinterpret_cast<WCHAR_T *>(cls_names);
+  // Might contain multiple class names seperated by |
+  static char16_t cls_names[] = u"DocBuilder";
+  return reinterpret_cast<WCHAR_T *>(cls_names);
 }
 
 long GetClassObject(const WCHAR_T *clsName, IComponentBase **pInterface) {
-    if (!*pInterface) {
-        auto cls_name = std::u16string(reinterpret_cast<const char16_t *>(clsName));
-        if (cls_name == u"DocBuilder") {
-            *pInterface = new DocBuilderAddIn;
-        }
-        return (long) *pInterface;
+  if (!*pInterface) {
+    auto cls_name = std::u16string(reinterpret_cast<const char16_t *>(clsName));
+    if (cls_name == u"DocBuilder") {
+      *pInterface = new DocBuilderAddIn;
     }
-    return 0;
+    return (long)*pInterface;
+  }
+  return 0;
 }
 
 long DestroyObject(IComponentBase **pInterface) {
-    if (!*pInterface) {
-        return -1;
-    }
+  if (!*pInterface) {
+    return -1;
+  }
 
-    delete *pInterface;
-    *pInterface = nullptr;
-    return 0;
+  delete *pInterface;
+  *pInterface = nullptr;
+  return 0;
 }
 
 AppCapabilities SetPlatformCapabilities(const AppCapabilities capabilities) {
-    return eAppCapabilitiesLast;
+  return eAppCapabilitiesLast;
 }

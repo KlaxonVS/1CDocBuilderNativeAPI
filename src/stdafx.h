@@ -5,6 +5,6 @@
 
 #include <windows.h>
 
-#endif //_WINDOWS
+#endif  //_WINDOWS
 
-#endif //STDAFX_H
+#endif  // STDAFX_H
