@@ -1,6 +1,7 @@
 ﻿#include <sys/stat.h>
 
 #include <chrono>
+#include <codecvt>
 #include <cwchar>
 #include <iomanip>
 #include <iostream>
@@ -9,7 +10,6 @@
 #include <stdexcept>
 #include <string>
 #include <thread>
-#include <codecvt>
 
 #ifdef _WIN32
 #include <direct.h>
@@ -120,6 +120,11 @@ DocBuilderAddIn::DocBuilderAddIn() {
     AddMethod(L"CloseFile", L"ЗакрытьФайл", this, &DocBuilderAddIn::closeFile);
     AddMethod(L"GetDataFromRange", L"ПолучитьДанныеИзДиапазона", this,
               &DocBuilderAddIn::getDataFromRange);
+    AddMethod(L"InitGetDataFromRangeByCell",
+              L"ИнициализироватьПолучениеДанныхИзДиапазонаПоКлетке", this,
+              &DocBuilderAddIn::initGetDataFromRangeByCell);
+    AddMethod(L"GetNextCell", L"ПолучитьСледующейЯчейку", this,
+              &DocBuilderAddIn::getNextCell);
     // AddMethod(L"SetBorders", L"УстановитьГраницы", this,
     // &DocBuilderAddIn::setBorders);
 
@@ -609,17 +614,45 @@ variant_t DocBuilderAddIn::getDataFromRange(const variant_t &range) {
       break;
     }
     NSDoctRenderer::CValue oCell = oWorksheet.Call(
-        "GetRange", NSDoctRenderer::CDocBuilderValue(cell.c_str())
-    );
+        "GetRange", NSDoctRenderer::CDocBuilderValue(cell.c_str()));
     NSDoctRenderer::CValue oValue = oCell.Call("GetValue");
     NSDoctRenderer::CString val = oValue.ToString();
     wchar_t *w_val = val.c_str();
     std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
     res += (w_val != NULL) ? converter.to_bytes(w_val) : " ";
     res += ";";
-    
   }
 
+  return res;
+}
+
+void DocBuilderAddIn::initGetDataFromRangeByCell(const variant_t &range) {
+  if (!WorkDirIsSet || !FileIsSet) {
+    return;
+  }
+  spreadsheetRange = std::get<std::string>(range);
+}
+
+variant_t DocBuilderAddIn::getNextCell() {
+  if (!WorkDirIsSet || !FileIsSet) {
+    return "";
+  }
+  std::string res = "";
+  spreadsheetCell = getNextCellInRange(spreadsheetRange, spreadsheetCell);
+  if (spreadsheetCell != "") {
+    NSDoctRenderer::CContext oContext = Cbuild.GetContext();
+    NSDoctRenderer::CContextScope oScope = oContext.CreateScope();
+    NSDoctRenderer::CValue oGlobal = oContext.GetGlobal();
+    NSDoctRenderer::CValue oApi = oGlobal["Api"];
+    NSDoctRenderer::CValue oWorksheet = oApi.Call("GetActiveSheet");
+    NSDoctRenderer::CValue oCell = oWorksheet.Call(
+        "GetRange", NSDoctRenderer::CDocBuilderValue(spreadsheetCell.c_str()));
+    NSDoctRenderer::CValue oValue = oCell.Call("GetValue");
+    NSDoctRenderer::CString val = oValue.ToString();
+    wchar_t *w_val = val.c_str();
+    std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
+    res += (w_val != NULL) ? converter.to_bytes(w_val) : " ";
+  }
   return res;
 }
 

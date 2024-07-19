@@ -27,6 +27,8 @@ class DocBuilderAddIn final : public Component {
   // Spreadsheet API
   void fillRow(const variant_t &range, const variant_t &rowData);
   variant_t getDataFromRange(const variant_t &range);
+  void initGetDataFromRangeByCell(const variant_t &range);
+  variant_t getNextCell();
   // Spreadsheet API End
 
   void sleep(const variant_t &delay);
@@ -50,6 +52,8 @@ class DocBuilderAddIn final : public Component {
   bool WorkDirIsSet = false;
   bool AltPathToSaveIsSet = false;
   bool AltSavePathIsCorrect = false;
+  std::string spreadsheetRange = "";
+  std::string spreadsheetCell = "";
 
   wchar_t *stringToWchar(const std::string &str);
   std::vector<std::string> splitString(std::string source,
@@ -64,12 +68,13 @@ class DocBuilderAddIn final : public Component {
   // void setBorders(const variant_t &range, const variant_t &borders,
   //                 const variant_t &type, const variant_t &color);
 
-  // std::string getCellInRange(const std::string range, const std::string prevCell);
-  std::string getNextCellInRange(const std::string range, const std::string prevCell);
+  // std::string getCellInRange(const std::string range, const std::string
+  // prevCell);
+  std::string getNextCellInRange(const std::string range,
+                                 const std::string prevCell);
   void getRowIndx(const std::string cell, int *indx);
   void getColLetters(int indx, std::string *res_string);
   void getColIndx(const std::string cell, int *indx);
-
 
   enum class ExtensionUINT {
     DOCX = OFFICESTUDIO_FILE_DOCUMENT_DOCX,
