@@ -25,16 +25,19 @@ if (ANDROID)
             src/jnienv.h)
 endif ()
 
-set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,-rpath='${CMAKE_SOURCE_DIR}/docbuilder'") # важно линкует биб
+if (UNIX AND NOT APPLE)
+    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,-rpath='${CMAKE_SOURCE_DIR}/docbuilder_linux'") # важно линкует библ
+else (WIN32)
+    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,-rpath,'${CMAKE_SOURCE_DIR}/docbuilder_win'")
+endif ()
 
-add_library(${TARGET} SHARED
-        ${SOURCES})
+add_library(${TARGET} SHARED ${SOURCES})
 
 if (UNIX AND NOT APPLE)
-    target_link_libraries(${TARGET} "${CMAKE_SOURCE_DIR}/docbuilder/libdoctrenderer.so")
+    target_link_libraries(${TARGET} "${CMAKE_SOURCE_DIR}/docbuilder_linux/libdoctrenderer.so")
 endif()
 if(WIN32)
-    target_link_libraries(${TARGET} "${CMAKE_SOURCE_DIR}/docbuilder/libdoctrenderer.dll")
+    target_link_libraries(${TARGET} "${CMAKE_SOURCE_DIR}/docbuilder_win/libdoctrenderer.dll")
 endif()
 target_compile_definitions(${TARGET} PRIVATE
         UNICODE

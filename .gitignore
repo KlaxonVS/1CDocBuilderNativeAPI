@@ -1,5 +1,7 @@
 # Document builder resourses
 docbuilder/
+docbuilder_linux/
+docbuilder_win/
 
 # Build files
 build/
