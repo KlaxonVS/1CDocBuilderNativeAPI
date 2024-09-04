@@ -54,7 +54,7 @@ class Component : public IComponentBase {
 
   long ADDIN_API GetInfo() final { return 2100; };
 
-  void ADDIN_API Done() final{};
+  void ADDIN_API Done() final {};
 
   void ADDIN_API SetLocale(const WCHAR_T *locale) final;
 

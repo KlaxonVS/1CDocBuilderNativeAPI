@@ -1,9 +1,36 @@
 #ifndef DocBuilderAddIn_H
 #define DocBuilderAddIn_H
 
+#include <sys/stat.h>
+
+#include <chrono>
+#include <clocale>
+#include <codecvt>
+#include <cwchar>
+#include <iomanip>
+#include <iostream>
+#include <regex>
+#include <sstream>
+#include <stdexcept>
+#include <string>
+#include <thread>
+#include <variant>
+#ifdef _WIN32
+#include <direct.h>
+#define GetCurrentDir _getcwd
+#endif
+#ifdef __linux__
+#include <unistd.h>
+#define GetCurrentDir getcwd
+#endif
+
 #include "Component.h"
-#include "common.h"
-#include "docbuilder.h"
+
+#ifdef _WIN32
+#include "../docbuilder_win/include/docbuilder.h"
+#elif __linux__
+#include "../docbuilder_linux/include/docbuilder.h"
+#endif
 
 class DocBuilderAddIn final : public Component {
  public:
@@ -13,6 +40,7 @@ class DocBuilderAddIn final : public Component {
 
  private:
   std::string extensionName() override;
+
 
   void message(const variant_t &msg);
   // Doc API
@@ -36,7 +64,7 @@ class DocBuilderAddIn final : public Component {
   std::shared_ptr<variant_t> workDir;
   std::shared_ptr<variant_t> pathToFile;
   std::shared_ptr<variant_t> pathToSave;
-  NSDoctRenderer::CDocBuilder Cbuild;
+  
   bool FileIsSet = false;
   bool NewFileIsCreated = false;
   bool WorkDirIsSet = false;
@@ -45,9 +73,12 @@ class DocBuilderAddIn final : public Component {
   std::string spreadsheetRange = "";
   std::string spreadsheetCell = "";
 
+  std::shared_ptr <NSDoctRenderer::CDocBuilder> Cbuild;
+
   wchar_t *stringToWchar(const std::string &str);
-  std::vector<std::string> splitString(std::string source,
-                                       std::string delimiter);
+  wchar_t *stringToWchar(const std::string &str, bool alt);
+  std::vector<std::string> splitString(const std::string source,
+                                       const std::string delimiter);
 
   std::string wcharToString(const wchar_t *wstr);
 

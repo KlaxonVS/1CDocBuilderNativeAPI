@@ -1,44 +1,32 @@
-﻿#include <sys/stat.h>
+﻿#include "DocBuilderAddIn.h"
+#include <fstream>
 
-#include <chrono>
-#include <codecvt>
-#include <cwchar>
-#include <iomanip>
-#include <iostream>
-#include <regex>
-#include <sstream>
-#include <stdexcept>
-#include <string>
-#include <thread>
-
-#ifdef _WIN32
-#include <direct.h>
-#define GetCurrentDir _getcwd
-#endif
-#ifdef __linux__
-#include <unistd.h>
-#define GetCurrentDir getcwd
-#endif
-
-#include "DocBuilderAddIn.h"
 
 std::string DocBuilderAddIn::extensionName() { return "DocBuilder"; }
 
 DocBuilderAddIn::DocBuilderAddIn() {
+  Cbuild = std::make_shared<NSDoctRenderer::CDocBuilder>();
+  setlocale(LC_ALL, "Russian.UTF8");
   workDir = std::make_shared<variant_t>();
   AddProperty(
       L"WorkDir", L"РабочаяДиректория", [&]() { return workDir; },
       [&](variant_t &&v) {
-        WorkDirIsSet = (std::holds_alternative<std::string>(v) &&
-                        !std::get<std::string>(v).empty() &&
-                        pathExists(std::get<std::string>(v)));
+        bool isSetNotEmpty = std::holds_alternative<std::string>(v) &&
+                             !std::get<std::string>(v).empty();
+        bool pExists = pathExists(v);
+        WorkDirIsSet = (isSetNotEmpty && pExists);
         if (!WorkDirIsSet) {
-          AddError(ADDIN_E_FAIL, extensionName(),
-                   u8"Рабочая директория не существует.", true);
+          std::string msg =
+              "Рабочая директория не существует или некорректна: " +
+              std::get<std::string>(v) +
+              "\nПуть задан и не пустой: " + std::to_string(isSetNotEmpty) +
+              "\nПуть существует: " + std::to_string(pExists);
+          AddError(ADDIN_E_FAIL, extensionName(), msg, true);
         } else {
           *workDir = std::move(v);
-          wchar_t *BuildPath = stringToWchar(std::get<std::string>(*workDir));
+          wchar_t* BuildPath = stringToWchar(std::get<std::string>(*workDir));
           NSDoctRenderer::CDocBuilder::Initialize(BuildPath);
+          Cbuild->SetProperty("--work-directory", BuildPath);
           delete[] BuildPath;
         };
       });
@@ -47,33 +35,25 @@ DocBuilderAddIn::DocBuilderAddIn() {
   AddProperty(
       L"PathToFile", L"ПутьКФайлу", [&]() { return pathToFile; },
       [&](variant_t &&v) {
-        if (WorkDirIsSet) {
-          FileIsSet = (std::holds_alternative<std::string>(v) &&
-                       !std::get<std::string>(v).empty() &&
-                       getExtension(std::get<std::string>(v)) != 0);
-          if (!FileIsSet) {
-            AddError(
-                ADDIN_E_FAIL, extensionName(),
-                u8"Файл не задан. (Полный путь к файлу включая расширение)",
-                true);
+        FileIsSet = (std::holds_alternative<std::string>(v) &&
+                     !std::get<std::string>(v).empty() && getExtension(v) != 0);
+        if (!FileIsSet) {
+          AddError(ADDIN_E_FAIL, extensionName(),
+                   u8"Файл не задан. (Полный путь к файлу включая расширение)",
+                   true);
+        } else {
+          *pathToFile = std::move(v);
+          wchar_t *wPTT = stringToWchar(std::get<std::string>(*pathToFile), true);
+          if (fileExists(*pathToFile)) {
+            int x2t = Cbuild->OpenFile(wPTT, L"");
           } else {
-            *pathToFile = std::move(v);
-            wchar_t *BuildPath = stringToWchar(std::get<std::string>(*workDir));
-            Cbuild.SetProperty("--work-directory", BuildPath);
-            wchar_t *wPTT = stringToWchar(std::get<std::string>(*pathToFile));
-            if (fileExists(std::get<std::string>(*pathToFile))) {
-              Cbuild.OpenFile(wPTT, L"");
-            } else {
-              Cbuild.CreateFile(
-                  getExtension(std::get<std::string>(*pathToFile)));
-              NewFileIsCreated = true;
-              *pathToSave = std::get<std::string>(*pathToFile);
-              PathToSaveIsSet = true;
-            }
-            delete[] wPTT;
-            delete[] BuildPath;
+              AddError(ADDIN_E_FAIL, extensionName(),
+                  u8"Файл не существует.",
+                  true);
           }
-        };
+          delete[] wPTT;
+        }
+        return "OK";
       });
 
   pathToSave = std::make_shared<variant_t>();
@@ -82,8 +62,7 @@ DocBuilderAddIn::DocBuilderAddIn() {
       [&](variant_t &&v) {
         bool SavePathIsCorrect =
             (std::holds_alternative<std::string>(v) &&
-             !std::get<std::string>(v).empty() &&
-             getExtension(std::get<std::string>(v)) != 0);
+             !std::get<std::string>(v).empty() && getExtension(v) != 0);
         if (!SavePathIsCorrect) {
           AddError(ADDIN_E_FAIL, extensionName(),
                    u8"Файл не задан. (Полный путь к файлу включая расширение)",
@@ -111,7 +90,7 @@ DocBuilderAddIn::DocBuilderAddIn() {
             &DocBuilderAddIn::saveAndCloseFile);
   AddMethod(L"CloseFile", L"ЗакрытьФайл", this, &DocBuilderAddIn::closeFile);
   AddMethod(L"GetDataFromRange", L"ПолучитьДанныеИзДиапазона", this,
-            &DocBuilderAddIn::getDataFromRange);
+            &DocBuilderAddIn:: getDataFromRange);
   AddMethod(L"InitGetDataFromRangeByCell",
             L"ИнициализироватьПолучениеДанныхИзДиапазонаПоКлетке", this,
             &DocBuilderAddIn::initGetDataFromRangeByCell);
@@ -133,6 +112,7 @@ DocBuilderAddIn::DocBuilderAddIn() {
 }
 
 void DocBuilderAddIn::message(const variant_t &msg) {
+  setlocale(LC_ALL, "Russian.UTF8");
   std::visit(
       overloaded{
           [&](const std::string &v) {
@@ -160,6 +140,10 @@ void DocBuilderAddIn::message(const variant_t &msg) {
 }
 
 void DocBuilderAddIn::searchAndReplace(const variant_t &keysAndValues) {
+  if (!WorkDirIsSet || !FileIsSet) {
+    return;
+  }
+  setlocale(LC_ALL, "Russian.UTF8");
   if (!std::holds_alternative<std::string>(keysAndValues)) {
     AddError(
         ADDIN_E_FAIL, extensionName(),
@@ -168,7 +152,7 @@ void DocBuilderAddIn::searchAndReplace(const variant_t &keysAndValues) {
         false);
     return;
   }
-  unsigned int extension = getExtension(std::get<std::string>(*pathToFile));
+  unsigned int extension = getExtension(*pathToFile);
   if (extension == 0 ||
       extension < static_cast<unsigned int>(ExtensionUINT::DOCX) ||
       extension > static_cast<unsigned int>(ExtensionUINT::RTF)) {
@@ -178,16 +162,8 @@ void DocBuilderAddIn::searchAndReplace(const variant_t &keysAndValues) {
   }
 
   std::string kAV = std::get<std::string>(keysAndValues);
-  bool useAltPath = (PathToSaveIsSet);
-  if (useAltPath && getExtension(std::get<std::string>(*pathToSave)) == 0) {
-    AddError(ADDIN_E_FAIL, extensionName(),
-             u8"Не поддерживаемое расширение для пути сохранения.", false);
-    return;
-  }
-  if (!WorkDirIsSet) {
-    return;
-  }
-  NSDoctRenderer::CContext oContext = Cbuild.GetContext();
+
+  NSDoctRenderer::CContext oContext = Cbuild->GetContext();
   NSDoctRenderer::CContextScope oScope = oContext.CreateScope();
   NSDoctRenderer::CValue oGlobal = oContext.GetGlobal();
   NSDoctRenderer::CValue oApi = oGlobal["Api"];
@@ -195,8 +171,9 @@ void DocBuilderAddIn::searchAndReplace(const variant_t &keysAndValues) {
   NSDoctRenderer::CValue oDocument = oApi.Call("GetDocument");
 
   std::vector<std::string> keysAndValuesList = splitString(kAV, ";");
-  for (std::string kAV : keysAndValuesList) {
-    std::vector<std::string> keyAndValue = splitString(kAV, "=");
+  for (std::string kv : keysAndValuesList) {
+    if (kv.empty()) break;
+    std::vector<std::string> keyAndValue = splitString(kv, "=");
     if (keyAndValue.size() == 2) {
       NSDoctRenderer::CValue oObject = oContext.CreateObject();
       oObject.SetProperty(L"searchString", keyAndValue[0].c_str());
@@ -209,30 +186,37 @@ void DocBuilderAddIn::searchAndReplace(const variant_t &keysAndValues) {
 variant_t DocBuilderAddIn::searchAndReplaceOneCMD(
     const variant_t &pathToTemplate, const variant_t &keysAndValues,
     const variant_t &altPathToSave) {
-  if (!fileExists(std::get<std::string>(pathToTemplate))) {
+  if (!WorkDirIsSet) {
+      AddError(ADDIN_E_FAIL, extensionName(),
+          u8"Рабочая директория не задана!",
+          false);
+    return "Ошибка!";
+  }
+  setlocale(LC_ALL, "Russian.UTF8");
+  if (!fileExists(pathToTemplate)) {
     AddError(ADDIN_E_FAIL, extensionName(),
              u8"Файл не существует. НайтиИЗаменить(СторокаСПутемКФайлу, "
              u8"СтрокаСКлючамиИЗначениями(ключ=значение;';' - делимитер), "
-             u8"ПутьКФайлуДляСохранения(Опционально))",
+             u8"ПутьКФайлуДляСохранения)",
              false);
-    return "";
+    return "Ошибка!";
   }
   if (!std::holds_alternative<std::string>(keysAndValues) ||
       !std::holds_alternative<std::string>(pathToTemplate)) {
     AddError(ADDIN_E_FAIL, extensionName(),
              u8"Не поддерживаемые типы данных. "
              u8"НайтиИЗаменить(СторокаСПутемКФайлу, СтрокаСКлючамиИЗначениями,"
-             u8" СторокаСПутемКФайлуДляСохранения(Опционально))",
+             u8" СторокаСПутемКФайлуДляСохранения)",
              false);
-    return "";
+    return "Ошибка!";
   }
-  unsigned int extension = getExtension(std::get<std::string>(pathToTemplate));
+  unsigned int extension = getExtension(pathToTemplate);
   if (extension == 0 ||
       extension < static_cast<unsigned int>(ExtensionUINT::DOCX) ||
       extension > static_cast<unsigned int>(ExtensionUINT::RTF)) {
     AddError(ADDIN_E_FAIL, extensionName(),
              u8"Не поддерживаемое расширение исходного документа.", false);
-    return "";
+    return "Ошибка!";
   }
 
   std::string kAV = std::get<std::string>(keysAndValues);
@@ -246,62 +230,50 @@ variant_t DocBuilderAddIn::searchAndReplaceOneCMD(
   if (useAltPath) {
     APS = std::get<std::string>(altPathToSave);
     wAPS = stringToWchar(APS);
-    saveExtension = getExtension(std::get<std::string>(altPathToSave));
+    saveExtension = getExtension(altPathToSave);
   }
   if (useAltPath && saveExtension == 0) {
     AddError(ADDIN_E_FAIL, extensionName(),
              u8"Не поддерживаемое расширение для пути сохранения.", false);
-    return "";
+    return "Ошибка!";
   }
-  const wchar_t *BuildPath;
-  bool checkWorkDir = (std::holds_alternative<std::string>(*workDir) &&
-                       !std::get<std::string>(*workDir).empty());
-  if (!checkWorkDir) {
-    AddError(ADDIN_E_FAIL, extensionName(), u8"Не задана рабочая директория.",
-             false);
-  } else {
-    BuildPath = stringToWchar(std::get<std::string>(*workDir));
-  }
-  if (checkWorkDir && pathExists(std::get<std::string>(*workDir))) {
-    NSDoctRenderer::CDocBuilder::Initialize(BuildPath);
-    NSDoctRenderer::CDocBuilder Cbuild;
-    Cbuild.SetProperty("--work-directory", BuildPath);
-    Cbuild.OpenFile(wPTT, L"");
+  std::string tmp = std::get<std::string>(altPathToSave);
 
-    NSDoctRenderer::CContext oContext = Cbuild.GetContext();
-    NSDoctRenderer::CContextScope oScope = oContext.CreateScope();
-    NSDoctRenderer::CValue oGlobal = oContext.GetGlobal();
-    NSDoctRenderer::CValue oApi = oGlobal["Api"];
+  int x2t = Cbuild->OpenFile(wPTT, L"");
 
-    NSDoctRenderer::CValue oDocument = oApi.Call("GetDocument");
+  NSDoctRenderer::CContext oContext = Cbuild->GetContext();
+  NSDoctRenderer::CContextScope oScope = oContext.CreateScope();
+  NSDoctRenderer::CValue oGlobal = oContext.GetGlobal();
+  NSDoctRenderer::CValue oApi = oGlobal["Api"];
 
-    std::vector<std::string> keysAndValuesList = splitString(kAV, ";");
-    for (std::string kAV : keysAndValuesList) {
-      std::vector<std::string> keyAndValue = splitString(kAV, "=");
-      if (keyAndValue.size() == 2) {
-        NSDoctRenderer::CValue oObject = oContext.CreateObject();
-        oObject.SetProperty(L"searchString", keyAndValue[0].c_str());
-        oObject.SetProperty(L"replaceString", keyAndValue[1].c_str());
-        oDocument.Call("SearchAndReplace", oObject);
-      }
+  NSDoctRenderer::CValue oDocument = oApi.Call("GetDocument");
+
+  std::vector<std::string> keysAndValuesList = splitString(kAV, ";");
+  for (std::string kv : keysAndValuesList) {
+    if (kv.empty()) break;
+   std::vector<std::string> keyAndValue = splitString(kv, "=");
+   if (keyAndValue.size() == 2) {
+      NSDoctRenderer::CValue oObject = oContext.CreateObject();
+      oObject.SetProperty(L"searchString", keyAndValue[0].c_str());
+      oObject.SetProperty(L"replaceString", keyAndValue[1].c_str());
+      oDocument.Call("SearchAndReplace", oObject);
     }
-
-    Cbuild.SaveFile((useAltPath ? saveExtension : extension),
-                    (useAltPath ? wAPS : wPTT));
-    Cbuild.CloseFile();
-    NSDoctRenderer::CDocBuilder::Dispose();
-    delete[] wPTT;
-    delete[] BuildPath;
-    if (useAltPath) {
-      delete[] wAPS;
-    }
-    char tmpPath[1024] = u8"Документ сформирован. Путь: ";
-    strncat(tmpPath, useAltPath ? APS.c_str() : pTT.c_str(),
-            useAltPath ? strlen(APS.c_str()) : strlen(pTT.c_str()));
-    AddError(ADDIN_E_INFO, extensionName(), tmpPath, false);
-    return useAltPath ? APS : pTT;
   }
-  return "";
+  int check2 = Cbuild->SaveFile((useAltPath ? saveExtension : extension),
+                  (useAltPath ? wAPS : wPTT));
+  Cbuild->CloseFile();
+
+  delete[] wPTT;
+  if (useAltPath) {
+    delete[] wAPS;
+  }
+  char tmpPath[1024] = u8"Документ сформирован. Путь: ";
+  strncat(tmpPath, useAltPath ? APS.c_str() : pTT.c_str(),
+          useAltPath ? strlen(APS.c_str()) : strlen(pTT.c_str()));
+  AddError(ADDIN_E_INFO, extensionName(), tmpPath, false);
+  std::string res;
+  useAltPath == true ? res = APS : res = pTT;
+  return res;
 }
 
 void DocBuilderAddIn::fillRow(const variant_t &range,
@@ -309,7 +281,8 @@ void DocBuilderAddIn::fillRow(const variant_t &range,
   if (!WorkDirIsSet || !FileIsSet) {
     return;
   }
-  unsigned int extension = getExtension(std::get<std::string>(*pathToFile));
+  setlocale(LC_ALL, "Russian.UTF8");
+  unsigned int extension = getExtension(*pathToFile);
   if (extension == 0 ||
       extension < static_cast<unsigned int>(ExtensionUINT::XLSX) ||
       extension > static_cast<unsigned int>(ExtensionUINT::OTS)) {
@@ -323,7 +296,7 @@ void DocBuilderAddIn::fillRow(const variant_t &range,
              u8"Диапазон ячеек должен быть в одной строке.", false);
     return;
   }
-  NSDoctRenderer::CContext oContext = Cbuild.GetContext();
+  NSDoctRenderer::CContext oContext = Cbuild->GetContext();
   NSDoctRenderer::CContextScope oScope = oContext.CreateScope();
   NSDoctRenderer::CValue oGlobal = oContext.GetGlobal();
   NSDoctRenderer::CValue oApi = oGlobal["Api"];
@@ -332,7 +305,8 @@ void DocBuilderAddIn::fillRow(const variant_t &range,
   std::vector<std::string> colDataArr =
       splitString(std::get<std::string>(rowData), ";");
   NSDoctRenderer::CValue rArray = oContext.CreateArray(1);
-  NSDoctRenderer::CValue cArray = oContext.CreateArray(colDataArr.size());
+  int arr_size = (int)colDataArr.size();
+  NSDoctRenderer::CValue cArray = oContext.CreateArray(arr_size);
   for (int i = 0; i < colDataArr.size(); i++) {
     cArray[i] = colDataArr[i].c_str();
   }
@@ -343,9 +317,10 @@ void DocBuilderAddIn::fillRow(const variant_t &range,
 }
 
 bool DocBuilderAddIn::checkRangeInOneRow(const std::string range) {
+  setlocale(LC_ALL, "Russian.UTF8");
   bool res = false;
   std::string rangeCpy = range;
-  int rows[3];
+  int rows[3] = {0, 0};
   std::regex pattern("\\d+");
 
   std::smatch matches;
@@ -368,32 +343,46 @@ bool DocBuilderAddIn::checkRangeInOneRow(const std::string range) {
 
 std::vector<std::string> DocBuilderAddIn::splitString(std::string source,
                                                       std::string delimiter) {
+  setlocale(LC_ALL, "Russian.UTF8");
   std::vector<std::string> result;
+  std::string tmpsource = source;
   size_t pos = 0;
   std::string token;
-  while ((pos = source.find(delimiter)) != std::string::npos) {
-    token = source.substr(0, pos);
+  while ((pos = tmpsource.find(delimiter)) != std::string::npos) {
+    token = tmpsource.substr(0, pos);
     result.push_back(token);
-    source.erase(0, pos + delimiter.length());
+    tmpsource.erase(0, pos + delimiter.length());
   }
-  result.push_back(source);
+  result.push_back(tmpsource);
   return result;
 }
 wchar_t *DocBuilderAddIn::stringToWchar(const std::string &str) {
+  setlocale(LC_ALL, "Russian.UTF8");
   size_t len = str.length();
   wchar_t *res = new wchar_t[len + 1];
   const char *cstr = str.c_str();
   std::mbstowcs(res, cstr, len);
-  res[len] = L'\0';
+  res[len] = L'\0'; 
+  return res;
+}
+
+wchar_t *DocBuilderAddIn::stringToWchar(const std::string &str, bool alt) {
+  std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t> converter;
+  std::wstring wstr = converter.from_bytes(str);
+  wchar_t *res = new wchar_t[wstr.size() + 1];
+  std::copy(wstr.begin(), wstr.end(), res);
+  res[wstr.size()] = L'\0';
   return res;
 }
 
 std::string DocBuilderAddIn::wcharToString(const wchar_t *wstr) {
+  setlocale(LC_ALL, "Russian.UTF8");
   std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
-  return wstr != NULL ? converter.to_bytes(wstr) : "";
+  return (wstr != NULL ? converter.to_bytes(wstr) : "");
 }
 
 unsigned int DocBuilderAddIn::getExtension(const variant_t &path) {
+  setlocale(LC_ALL, "Russian.UTF8");
   if (!std::holds_alternative<std::string>(path)) {
     AddError(ADDIN_E_FAIL, extensionName(),
              u8"Не поддерживаемые типы данных. Тип пути должен быть строкой и "
@@ -444,6 +433,7 @@ unsigned int DocBuilderAddIn::getExtension(const variant_t &path) {
 }
 
 bool DocBuilderAddIn::fileExists(const variant_t &path) {
+  setlocale(LC_ALL, "Russian.UTF8");
   bool res = false;
   if (!std::holds_alternative<std::string>(path)) {
     return false;
@@ -457,43 +447,51 @@ bool DocBuilderAddIn::fileExists(const variant_t &path) {
 }
 
 bool DocBuilderAddIn::pathExists(const variant_t &path) {
+  setlocale(LC_ALL, "Russian.UTF8");
   bool res = false;
-  if (!std::holds_alternative<std::string>(path) || !fileExists(path)) {
+  if (!std::holds_alternative<std::string>(path)) {
     return false;
   }
   std::string pathToFile = std::get<std::string>(path);
   struct stat bf;
-  stat(pathToFile.c_str(), &bf) == 0 ? res = true : res = false;
+#ifdef __linux__
+  res = stat(pathToFile.c_str(), &bf) == 0 && S_ISDIR(bf.st_mode);
+#elif _WIN32
+  res = stat(pathToFile.c_str(), &bf) == 0 && !fileExists(path);
+#endif
   return res;
 }
 
 variant_t DocBuilderAddIn::saveAndCloseFile() {
-  if (WorkDirIsSet && FileIsSet) {
+  setlocale(LC_ALL, "Russian.UTF8");
+  if (WorkDirIsSet && FileIsSet && PathToSaveIsSet) {
     std::string path = std::get<std::string>(*pathToSave);
     wchar_t *wpath = stringToWchar(path);
-    Cbuild.SaveFile(getExtension(path), wpath);
-    Cbuild.CloseFile();
+    bool res = Cbuild->SaveFile(getExtension(path), wpath);
+    Cbuild->CloseFile();
     delete[] wpath;
-    return *pathToSave;
+    return path;
   }
-  return "";
+  return "Что-то пошло не так!";
 }
 
 variant_t DocBuilderAddIn::closeFile() {
+  setlocale(LC_ALL, "Russian.UTF8");
   if (WorkDirIsSet && FileIsSet) {
-    Cbuild.CloseFile();
-    return *pathToFile;
+    Cbuild->CloseFile();
+    return std::get<std::string>(*pathToFile);
   }
   return "";
 }
 
 variant_t DocBuilderAddIn::getDataFromRange(const variant_t &range) {
+  setlocale(LC_ALL, "Russian.UTF8");
   if (!WorkDirIsSet || !FileIsSet) {
     return "";
   }
   std::string lRange = std::get<std::string>(range);
   std::string res = "";
-  NSDoctRenderer::CContext oContext = Cbuild.GetContext();
+  NSDoctRenderer::CContext oContext = Cbuild->GetContext();
   NSDoctRenderer::CContextScope oScope = oContext.CreateScope();
   NSDoctRenderer::CValue oGlobal = oContext.GetGlobal();
   NSDoctRenderer::CValue oApi = oGlobal["Api"];
@@ -519,6 +517,7 @@ variant_t DocBuilderAddIn::getDataFromRange(const variant_t &range) {
 }
 
 void DocBuilderAddIn::initGetDataFromRangeByCell(const variant_t &range) {
+  setlocale(LC_ALL, "Russian.UTF8");
   if (!WorkDirIsSet || !FileIsSet) {
     return;
   }
@@ -531,16 +530,14 @@ variant_t DocBuilderAddIn::isGettingDataFromRange() {
 }
 
 variant_t DocBuilderAddIn::getNextCell() {
-  if (!WorkDirIsSet || !FileIsSet) {
+  if (!WorkDirIsSet || !FileIsSet || !initGetDataFromRangeByCellIsSet) {
     return "";
   }
-  if (!initGetDataFromRangeByCellIsSet) {
-    return "";
-  }
+  
   std::string res = "";
   spreadsheetCell = getNextCellInRange(spreadsheetRange, spreadsheetCell);
   if (spreadsheetCell != "") {
-    NSDoctRenderer::CContext oContext = Cbuild.GetContext();
+    NSDoctRenderer::CContext oContext = Cbuild->GetContext();
     NSDoctRenderer::CContextScope oScope = oContext.CreateScope();
     NSDoctRenderer::CValue oGlobal = oContext.GetGlobal();
     NSDoctRenderer::CValue oApi = oGlobal["Api"];
@@ -561,6 +558,7 @@ variant_t DocBuilderAddIn::getNextCell() {
 
 std::string DocBuilderAddIn::getNextCellInRange(const std::string range,
                                                 const std::string prevCell) {
+  setlocale(LC_ALL, "Russian.UTF8");
   std::string rangeCpy = range;
   std::vector<std::string> rangeArr = splitString(range, ":");
   std::string from = rangeArr[0];
@@ -595,11 +593,12 @@ std::string DocBuilderAddIn::getNextCellInRange(const std::string range,
 }
 
 void DocBuilderAddIn::getColIndx(const std::string cell, int *indx) {
+  setlocale(LC_ALL, "Russian.UTF8");
   *indx = 0;
   char *cellCpy = (char *)calloc(cell.size() + 1, sizeof(char));
   strncpy(cellCpy, cell.c_str(), cell.size());
   cellCpy[cell.size()] = '\0';
-  int len = cell.size();
+  int len = (int)cell.size();
   unsigned colCorrection = 1;
   for (int i = len - 1; i >= 0; i--) {
     char c = cellCpy[i];
@@ -613,6 +612,7 @@ void DocBuilderAddIn::getColIndx(const std::string cell, int *indx) {
 }
 
 void DocBuilderAddIn::getColLetters(int indx, std::string *res_string) {
+  setlocale(LC_ALL, "Russian.UTF8");
   if (indx > 25) {
     getColLetters(indx / 26 - 1, res_string);
   }
@@ -620,9 +620,10 @@ void DocBuilderAddIn::getColLetters(int indx, std::string *res_string) {
 }
 
 void DocBuilderAddIn::getRowIndx(const std::string cell, int *indx) {
+  setlocale(LC_ALL, "Russian.UTF8");
   *indx = 0;
   int len = (int)cell.size();
-  char num[len + 1];
+  char *num = new char[len + 1];
   for (int i = 0; i < len; i++) {
     num[i] = '0';
   }
@@ -634,9 +635,11 @@ void DocBuilderAddIn::getRowIndx(const std::string cell, int *indx) {
     }
   }
   *indx = atoi(num);
+  delete[] num;
 }
 
 bool DocBuilderAddIn::checkRange(const std::string range) {
+  setlocale(LC_ALL, "Russian.UTF8");
   bool res = false;
   if (range.size() > 0) {
     std::regex rgx("[A-Z]+[0-9]+:[A-Z]+[0-9]+");

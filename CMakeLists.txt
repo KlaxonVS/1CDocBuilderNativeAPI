@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.10)
-project(DocBuilderAddIn)
+
+project(DocBuilderAddIn CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(TARGET DocBuilderAddIn)
@@ -7,6 +8,13 @@ set(TARGET DocBuilderAddIn)
 option(CASE_INSENSITIVE "Case insensitive method names" OFF)
 option(STATIC_CRT "Static CRT linkage" OFF)
 option(OUT_PARAMS "Support output parameters" OFF)
+
+if (WIN32)
+    add_definitions(-DUNICODE -DWIN32 -D_USRDLL -D_CRT_SECURE_NO_WARNINGS -D_CRT_SECURE_NO_DEPRECATE -DADDINCPP_EXPORTS)
+endif ()
+if (UNIX AND NOT APPLE)
+    add_definitions(-D__linux__)
+endif ()
 
 list(APPEND SOURCES
         src/addin.def
@@ -16,8 +24,44 @@ list(APPEND SOURCES
         src/Component.cpp
         src/Component.h
         src/DocBuilderAddIn.cpp
-        src/DocBuilderAddIn.h
+        src/DocBuilderAddIn.h)
+
+list(APPEND H_SOURCES
+    "src/"
+    "include/"
 )
+
+if (UNIX AND NOT APPLE)
+    list(APPEND H_SOURCES
+        "docbuilder_linux/include"
+    )
+endif()
+if(WIN32)
+    list(APPEND H_SOURCES
+        "docbuilder_win/include"
+    )
+endif()
+
+list(APPEND SOURCES
+    ${H_SOURCES}
+)
+
+
+
+if (UNIX AND NOT APPLE)
+    set(LIBRARY_DIRS
+    "${CMAKE_SOURCE_DIR}/docbuilder_linux"
+)
+endif()
+if(WIN32)
+    set(LIBRARY_DIRS
+        "C:/Windows/System32"
+        "${CMAKE_SOURCE_DIR}/docbuilder_win"
+        "C:/Windows/System32/downlevel"
+    )
+endif()
+
+link_directories(${LIBRARY_DIRS})
 
 if (ANDROID)
     list(APPEND SOURCES
@@ -26,19 +70,37 @@ if (ANDROID)
 endif ()
 
 if (UNIX AND NOT APPLE)
-    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,-rpath='${CMAKE_SOURCE_DIR}/docbuilder_linux'") # важно линкует библ
-else (WIN32)
-    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,-rpath,'${CMAKE_SOURCE_DIR}/docbuilder_win'")
+    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,-rpath='${CMAKE_SOURCE_DIR}/docbuilder_linux'")
 endif ()
 
 add_library(${TARGET} SHARED ${SOURCES})
 
+target_include_directories(${TARGET} PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+if(WIN32)
+    target_precompile_headers(${TARGET} PUBLIC "${CMAKE_SOURCE_DIR}/src/stdafx.h")
+endif()
+
+set_target_properties( ${TARGET} PROPERTIES
+       POSITION_INDEPENDENT_CODE ON 
+       CXX_STANDARD 17
+       CXX_STANDARD_REQUIRED ON
+   )
+target_include_directories(${TARGET} PRIVATE ${H_SOURCES})
+
 if (UNIX AND NOT APPLE)
-    target_link_libraries(${TARGET} "${CMAKE_SOURCE_DIR}/docbuilder_linux/libdoctrenderer.so")
+    find_library(DOCTRENDERER doctrenderer "${CMAKE_SOURCE_DIR}/docbuilder_linux/")
+    message(STATUS "DOCTRENDERER_linux: ${DOCTRENDERER}")
+    target_link_libraries(${TARGET} PRIVATE ${DOCTRENDERER})
 endif()
 if(WIN32)
-    target_link_libraries(${TARGET} "${CMAKE_SOURCE_DIR}/docbuilder_win/libdoctrenderer.dll")
+    find_library(DOCTRENDERER doctrenderer "${CMAKE_SOURCE_DIR}/docbuilder_win/")
+    message(STATUS "DOCTRENDERER_win: ${DOCTRENDERER}")
+    target_link_libraries(${TARGET} PRIVATE ${DOCTRENDERER})
 endif()
+
+set_property(TARGET ${TARGET} PROPERTY LINK_DIRECTORIES ${LIBRARY_DIRS})
+
+
 target_compile_definitions(${TARGET} PRIVATE
         UNICODE
         _UNICODE)
@@ -53,7 +115,6 @@ endif ()
 
 target_include_directories(${TARGET} PRIVATE
         include)
-
 
 if (WIN32 AND NOT MSVC)
     message(FATAL_ERROR "Must be compiled with MSVC on Windows")
@@ -71,9 +132,9 @@ if (WIN32)
 endif ()
 
 if (UNIX)
-    if (TARGET_ARCH STREQUAL "x86")
-        set(CMAKE_C_FLAGS "-m32 ${CMAKE_C_FLAGS}")
-        set(CMAKE_CXX_FLAGS "-m32 ${CMAKE_CXX_FLAGS}")
+    if (TARGET_ARCH STREQUAL "x86_64")
+        set(CMAKE_C_FLAGS "-m64 ${CMAKE_C_FLAGS}")
+        set(CMAKE_CXX_FLAGS "-m64 ${CMAKE_CXX_FLAGS}")
     endif ()
 endif ()
 
