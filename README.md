@@ -6,7 +6,4 @@
 
 ✔ Windows  
 ✔ Linux  
-⚠ MacOS (compiled but not tested)  
-✔ Android  
-❌ iOS  
-❌ Browser Extenstions
+❌ MacOS  
